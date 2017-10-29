@@ -18,11 +18,13 @@ open Giraffe.Middleware
 open Giraffe.Razor.HttpHandlers
 open Giraffe.Razor.Middleware
 open Giraffe.HttpContextExtensions
-open test_giraffe.Models
 
-open System.Data.SqlClient
 open System.Dynamic
 open Dapper
+
+open NPoco
+
+open Microsoft.FSharpLu.Json
 
 
 // Add handler to Dapper to map to Option types
@@ -84,8 +86,12 @@ let combineQueryParts<'T> (query: string) (sq: SelectQuery) =
         q <- query + " where " + sq.query
     { query = q; parameters = sq.parameters; }
 
-
+[<CLIMutable>]
 type User = { Id: int64; Name: Option<string> }
+
+// type User() = 
+//     member val Id = 0 with get, set
+//     member val Name = "" with get, set
 
 
 // Optional parameters that can be filtered on when searching for a user
@@ -128,6 +134,11 @@ let getUser'' filter connection =
     |> Seq.head
 
 
+let addUser (user : User) =
+    use conn = new SqliteConnection(connString)
+    conn.Open()
+    use db = new Database(conn)
+    db.Insert(user) |> ignore
 
 let handleGetUser =
     fun (next: HttpFunc) (ctx: HttpContext) ->
@@ -140,6 +151,21 @@ let handleGetUser =
         json users next ctx
 
 
+let bindJson (ctx : HttpContext) =
+    task {
+        let! body = ctx.ReadBodyFromRequest()
+        return Compact.deserialize body
+    }
+
+let handleAddUser =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        task {
+            //let! user = ctx.BindJson<User>()
+            let! x = bindJson(ctx)
+            addUser x
+            return! text (sprintf "Added %d to the users" x.Id) next ctx
+        }
+
 // ---------------------------------
 // Web app
 // ---------------------------------
@@ -149,6 +175,10 @@ let webApp =
         GET >=>
             choose [
                 route "/user" >=> handleGetUser
+            ]
+        POST >=>
+            choose [
+                route "/user/add" >=> handleAddUser
             ]
         setStatusCode 404 >=> text "Not Found" ]
 
