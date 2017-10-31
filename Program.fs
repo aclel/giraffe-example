@@ -27,13 +27,6 @@ let bindJson (ctx : HttpContext) =
         return Compact.deserialize body
     }
 
-let handleAddBasin =
-    fun (next: HttpFunc) (ctx: HttpContext) ->
-        task {
-            let! x = bindJson(ctx)
-            addBasin x |> ignore
-            return! text (sprintf "%d" x.Id) next ctx
-        }
         
 let handleGetUser =
     fun (next: HttpFunc) (ctx: HttpContext) ->
@@ -42,14 +35,14 @@ let handleGetUser =
         json users next ctx
 
 
-//let handleAddUser =
-//    fun (next: HttpFunc) (ctx: HttpContext) ->
-//        task {
-//            //let! user = ctx.BindJson<User>() // Newtonsoft json deserialiser
-//            let! x = bindJson(ctx) // Microsoft.FSharpLu.Json json deserialiser
-//            addUser x
-//            return! text (sprintf "Added %d to the users" x.Id) next ctx
-//        }
+let handleAddUser =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        task {
+            //let! user = ctx.BindJson<User>() // Newtonsoft json deserialiser
+            let! x = bindJson(ctx) // Microsoft.FSharpLu.Json json deserialiser
+            addUser x
+            return! text (sprintf "Added %d to the users" x.Id) next ctx
+        }
 
 // ---------------------------------
 // Web app
@@ -63,7 +56,7 @@ let webApp =
             ]
         POST >=>
             choose [
-                route "/basin/add" >=> handleAddBasin
+                route "/user/add" >=> handleAddUser
             ]
         setStatusCode 404 >=> text "Not Found" ]
 
