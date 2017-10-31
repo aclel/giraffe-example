@@ -2,7 +2,6 @@ module test_giraffe.App
 
 open System
 open System.IO
-open System.Collections.Generic
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Cors.Infrastructure
@@ -10,7 +9,6 @@ open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
-open Microsoft.Data.Sqlite
 
 open Giraffe
 open Giraffe.HttpHandlers
@@ -19,154 +17,9 @@ open Giraffe.Razor.HttpHandlers
 open Giraffe.Razor.Middleware
 open Giraffe.HttpContextExtensions
 
-open System.Dynamic
-open Dapper
-
-open NPoco
-
 open Microsoft.FSharpLu.Json
 
-
-open FSharp.Data.Sql
-
-
-// Add handler to Dapper to map to Option types
-type OptionHandler<'T>() =
-    inherit SqlMapper.TypeHandler<option<'T>>()
-
-    override __.SetValue(param, value) = 
-        let valueOrNull = 
-            match value with
-            | Some x -> box x
-            | None -> null
-
-        param.Value <- valueOrNull    
-
-    override __.Parse value =
-        if isNull value || value = box DBNull.Value 
-        then None
-        else Some (value :?> 'T)
-
-SqlMapper.AddTypeHandler (OptionHandler<string>())
-
-let connString = "Filename=" + Path.Combine(Directory.GetCurrentDirectory(), "Sample.db")
-
-let dapperQuery<'Result> (query:string) (connection:SqliteConnection) =
-    connection.Query<'Result>(query)
-    
-let dapperParametrizedQuery<'Result> (query:string) (param:obj) (connection:SqliteConnection) : 'Result seq =
-    connection.Query<'Result>(query, param)
-
-let dapperMapParametrizedQuery<'Result> (query:string) (param : Map<string,_>) (connection:SqliteConnection) : 'Result seq =
-    let expando = ExpandoObject()
-    let expandoDictionary = expando :> IDictionary<string,obj>
-    for paramValue in param do
-        expandoDictionary.Add(paramValue.Key, paramValue.Value :> obj)
-
-    connection |> dapperParametrizedQuery query expando
-
-
-type QueryPart = { where: string; parameter: Option<obj>; parameterName: string }
-type SelectQuery = { query: string; parameters: Map<string, obj> }
-
-
-let where<'a> column operator parameterName (value : Option<'a>) =
-    match value with
-    | Some x -> { where = sprintf "%s %s %s" column operator parameterName; parameter = Some (box x); parameterName = parameterName; }
-    | None -> { where = ""; parameter = None; parameterName = ""; }
-
-
-let combineAnd (x: QueryPart) (sq: SelectQuery) =
-    match (x.parameter, sq.query) with
-    | (Some xpart, "") -> { query = x.where; parameters = Map [x.parameterName, Option.get x.parameter] }
-    | (Some xpart, _) -> { query = sq.query + " and " + x.where; parameters = sq.parameters.Add(x.parameterName, Option.get x.parameter) }
-    | (None, _) -> { query = sq.query; parameters = sq.parameters } 
-
-
-let combineQueryParts<'T> (query: string) (sq: SelectQuery) =
-    let mutable q = query
-    if (sq.query.Length > 0) then
-        q <- query + " where " + sq.query
-    { query = q; parameters = sq.parameters; }
-
-[<CLIMutable>]
-type User = { Id: int64; Name: Option<string> }
-
-// type User() = 
-//     member val Id = 0 with get, set
-//     member val Name = "" with get, set
-
-
-// Optional parameters that can be filtered on when searching for a user
-[<CLIMutable>]
-type UserFilter = { Id: Option<int64>; Name: Option<string> }
-
-
-let getUserQuery filter =
-    let query = "select id, name from user"
-
-    let idParam = where "id" "=" "@id" filter.Id
-    let nameParam = where "name" "=" "@name" filter.Name
-
-    let sq = { query = ""; parameters = Map []}
-    sq
-    |> combineAnd idParam
-    |> combineAnd nameParam
-    |> combineQueryParts query
-
-
-let getUsers connection =
-    connection
-    |> dapperQuery<User> "select id, name from user;"
-
-let getUser id connection =
-    connection
-    |> dapperMapParametrizedQuery<User> "select id, name from user where id = @id" (Map ["id", id])
-    |> Seq.head
-
-let getUser' id name connection =
-    connection
-    |> dapperParametrizedQuery<User> "select id, name from user where id = @Id or name = @Name" { Id=id; Name=name }
-    |> Seq.head
-
-let getUser'' filter connection =
-    let query = getUserQuery filter
-
-    connection
-    |> dapperMapParametrizedQuery<User> query.query query.parameters
-    |> Seq.head
-
-
-// Insert connection string here
-let [<Literal>] connectionString = ""
-let [<Literal>] resolutionPath =  __SOURCE_DIRECTORY__ + "/temp"
-
-
-type sql = SqlDataProvider<Common.DatabaseProviderTypes.ORACLE, connectionString, ResolutionPath = resolutionPath>
-let ctx = sql.GetDataContext()
-
-let accreds = ctx.WatersDev.Accred |> Seq.toArray
-let accred = ctx.WatersDev.Accred |> Seq.head
-let x = accred.Code
-
-let y = ctx.WatersDev.District |> Seq.head |> fun x -> x.Code
-
-let addUser (user : User) =
-    use conn = new SqliteConnection(connString)
-    conn.Open()
-    use db = new Database(conn)
-    db.Insert(user) |> ignore
-
-let handleGetUser =
-    fun (next: HttpFunc) (ctx: HttpContext) ->
-        use conn = new SqliteConnection(connString)
-        let filter = ctx.BindQueryString<UserFilter>()
-
-        // let id = Option.get filter.Id
-        // let name = Option.get filter.Name
-        let users = getUser'' filter conn
-        json users next ctx
-
+open DataAccess
 
 let bindJson (ctx : HttpContext) =
     task {
@@ -174,14 +27,29 @@ let bindJson (ctx : HttpContext) =
         return Compact.deserialize body
     }
 
-let handleAddUser =
+let handleAddBasin =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
-            //let! user = ctx.BindJson<User>()
             let! x = bindJson(ctx)
-            addUser x
-            return! text (sprintf "Added %d to the users" x.Id) next ctx
+            addBasin x |> ignore
+            return! text (sprintf "%d" x.Id) next ctx
         }
+        
+let handleGetUser =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let filter = ctx.BindQueryString<UserFilter>()
+        let users = getUser filter
+        json users next ctx
+
+
+//let handleAddUser =
+//    fun (next: HttpFunc) (ctx: HttpContext) ->
+//        task {
+//            //let! user = ctx.BindJson<User>() // Newtonsoft json deserialiser
+//            let! x = bindJson(ctx) // Microsoft.FSharpLu.Json json deserialiser
+//            addUser x
+//            return! text (sprintf "Added %d to the users" x.Id) next ctx
+//        }
 
 // ---------------------------------
 // Web app
@@ -195,7 +63,7 @@ let webApp =
             ]
         POST >=>
             choose [
-                route "/user/add" >=> handleAddUser
+                route "/basin/add" >=> handleAddBasin
             ]
         setStatusCode 404 >=> text "Not Found" ]
 

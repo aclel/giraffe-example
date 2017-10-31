@@ -57,6 +57,8 @@
     <Watch Include="**\*.cshtml" Exclude="bin\**\*" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="QueryHelpers.fs" />
+    <Compile Include="DataAccess.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
