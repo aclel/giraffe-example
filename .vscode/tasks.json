@@ -22,8 +22,7 @@
             "type": "shell",
             "group": "build",
             "args": [
-                "build",
-                "${workspaceRoot}/test_giraffe.fsproj"
+                "build"
             ],
             "presentation": {
                 "reveal": "silent"

@@ -27,6 +27,9 @@ open NPoco
 open Microsoft.FSharpLu.Json
 
 
+open FSharp.Data.Sql
+
+
 // Add handler to Dapper to map to Option types
 type OptionHandler<'T>() =
     inherit SqlMapper.TypeHandler<option<'T>>()
@@ -133,6 +136,20 @@ let getUser'' filter connection =
     |> dapperMapParametrizedQuery<User> query.query query.parameters
     |> Seq.head
 
+
+// Insert connection string here
+let [<Literal>] connectionString = ""
+let [<Literal>] resolutionPath =  __SOURCE_DIRECTORY__ + "/temp"
+
+
+type sql = SqlDataProvider<Common.DatabaseProviderTypes.ORACLE, connectionString, ResolutionPath = resolutionPath>
+let ctx = sql.GetDataContext()
+
+let accreds = ctx.WatersDev.Accred |> Seq.toArray
+let accred = ctx.WatersDev.Accred |> Seq.head
+let x = accred.Code
+
+let y = ctx.WatersDev.District |> Seq.head |> fun x -> x.Code
 
 let addUser (user : User) =
     use conn = new SqliteConnection(connString)
