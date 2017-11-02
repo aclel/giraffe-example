@@ -21,13 +21,8 @@ open Microsoft.FSharpLu.Json
 
 open DataAccess
 
-let bindJson (ctx : HttpContext) =
-    task {
-        let! body = ctx.ReadBodyFromRequest()
-        return Compact.deserialize body
-    }
 
-        
+
 let handleGetUser =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         let filter = ctx.BindQueryString<UserFilter>()
@@ -35,13 +30,36 @@ let handleGetUser =
         json users next ctx
 
 
-let handleAddUser =
+let handleGetBasin =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        let filter = ctx.BindQueryString<BasinFilter>()
+        let users = getBasin filter
+        json users next ctx
+
+
+//let handleAddUser =
+//    fun (next: HttpFunc) (ctx: HttpContext) ->
+//        task {
+//            //let! user = ctx.BindJson<User>() // Newtonsoft json deserialiser
+//            let! x = bindJson(ctx) // Microsoft.FSharpLu.Json json deserialiser
+//            addUser x
+//            return! text (sprintf "Added %d to the users" x.Id) next ctx
+//        }
+
+let bindJson (ctx : HttpContext) =
+    task {
+        let! body = ctx.ReadBodyFromRequest()
+        return Compact.deserialize body
+    }
+
+        
+let handleAddBasin =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
             //let! user = ctx.BindJson<User>() // Newtonsoft json deserialiser
             let! x = bindJson(ctx) // Microsoft.FSharpLu.Json json deserialiser
-            addUser x
-            return! text (sprintf "Added %d to the users" x.Id) next ctx
+            addBasin x
+            return! text (sprintf "Added" ) next ctx
         }
 
 // ---------------------------------
@@ -53,10 +71,12 @@ let webApp =
         GET >=>
             choose [
                 route "/user" >=> handleGetUser
+                route "/basin" >=> handleGetBasin
             ]
         POST >=>
             choose [
-                route "/user/add" >=> handleAddUser
+                // route "/user/add" >=> handleAddUser
+                route "/basin/add" >=> handleAddBasin
             ]
         setStatusCode 404 >=> text "Not Found" ]
 

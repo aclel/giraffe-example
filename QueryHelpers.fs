@@ -8,6 +8,8 @@ open Microsoft.Data.Sqlite
 open System.Dynamic
 open Dapper
 
+open Oracle.ManagedDataAccess.Client
+
 
 // Add handler to Dapper to map to Option types
 type OptionHandler<'T>() =
@@ -41,6 +43,21 @@ let dapperMapParametrizedQuery<'Result> (query:string) (param : Map<string,_>) (
         expandoDictionary.Add(paramValue.Key, paramValue.Value :> obj)
 
     connection |> dapperParametrizedQuery query expando
+
+
+let dapperQueryOracle<'Result> (query:string) (connection:OracleConnection) =
+    connection.Query<'Result>(query)
+    
+let dapperParametrizedQueryOracle<'Result> (query:string) (param:obj) (connection:OracleConnection) : 'Result seq =
+    connection.Query<'Result>(query, param)
+
+let dapperMapParametrizedQueryOracle<'Result> (query:string) (param : Map<string,_>) (connection:OracleConnection) : 'Result seq =
+    let expando = ExpandoObject()
+    let expandoDictionary = expando :> IDictionary<string,obj>
+    for paramValue in param do
+        expandoDictionary.Add(paramValue.Key, paramValue.Value :> obj)
+
+    connection |> dapperParametrizedQueryOracle query expando
 
 
 type QueryPart = { where: string; parameter: Option<obj>; parameterName: string }
