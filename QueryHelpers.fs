@@ -60,8 +60,7 @@ let combineAnd (x: QueryPart) (sq: SelectQuery) =
     | (None, _) -> { query = sq.query; parameters = sq.parameters } 
 
 
-let combineQueryParts<'T> (query: string) (sq: SelectQuery) =
-    let mutable q = query
-    if (sq.query.Length > 0) then
-        q <- query + " where " + sq.query
-    { query = q; parameters = sq.parameters; }
+let combineQueryParts<'T> (initialQuery: string) (sq: SelectQuery) = 
+    (match sq.query.Length with
+        | 0 -> ""
+        | _ -> sprintf " where %s" sq.query) |> fun clause -> sprintf "%s%s" initialQuery clause
